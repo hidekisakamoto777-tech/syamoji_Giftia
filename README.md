@@ -35,7 +35,7 @@ PR後の承認は自分以外の担当、つまりフロントエンドで言え
 
 READMEにはプロジェクトの概要、共通ルール、関連文書への案内を記載します。要求・要件の詳細と、Issue・PRのひな形は別ファイルで管理します。
 
-要求・要件は、`docs/requirements/` に**Word版とMarkdown版の両方**を置きます。**正本はWord版**（要求定義書・要件定義書）で、Markdownは、開発やAIが読みやすくするための**写し**です（班の依頼で、Wordを保存しつつ、読みやすさのためにMarkdownも併存させます）。要求定義書は2026-11-12に仮確定しました（確定日は未定）。現在のMarkdownは、さとしゅんが2026-11-15に提出したWord版を、内容を変えずに転記したものです。GitHub用ひな形の正式配置は今後整備します。
+要求・要件は、`docs/requirements/` に**Word版とMarkdown版の両方**を置きます。**正本はWord版**（要求定義書・要件定義書）で、Markdownは、開発やAIが読みやすくするための**写し**です（班の依頼で、Wordを保存しつつ、読みやすさのためにMarkdownも併存させます）。要求定義書は2026-11-12に仮確定しました（確定日は未定）。現在のMarkdownは、さとしゅんが2026-11-15に提出したWord版を、内容を変えずに転記したものです。Issue・PRのひな形は、Giftia用に見直して `.github/` に置いています（Issue #7）。
 
 ```text
 .
@@ -51,11 +51,11 @@ READMEにはプロジェクトの概要、共通ルール、関連文書への�
 │   │   └── traceability.md            # 要求・要件・Issue・PR・確認結果の対応
 │   └── specifications/
 │       └── 仕様.md                     # 必要になった実装詳細の補足
-└── .github/                           # 今後正式配置するひな形
+└── .github/                           # GitHubのひな形
     ├── ISSUE_TEMPLATE/
-    │   ├── task.md
-    │   └── bug.md
-    └── pull_request_template.md
+    │   ├── task.md                    # タスク（機能・整備・ドキュメント）のIssue
+    │   └── bug.md                     # 不具合・文書との不一致のIssue
+    └── pull_request_template.md       # PR
 ```
 
 | 文書 | 記入すること |
@@ -84,7 +84,7 @@ READMEにはプロジェクトの概要、共通ルール、関連文書への�
 
 Word版を更新したときは、Markdownにも同じ内容を反映して整合を確認します。WordとMarkdownで異なる要求・要件を放置しません。食い違いを見つけたら、Word版を正として、担当者に連絡します。
 
-保存済みの `ISSUE_TEMPLATE/` と `pull_request_template.md` は別PJの参考資料です。Giftia用に見直してから `.github/` 配下へ正式配置します。READMEにはひな形の本文を重複して掲載しません。
+`.github/` のひな形（Issueのタスク・不具合、PR）は、6章・8章の項目に合わせて見直したものです（Issue #7）。IssueやPRを作るときに、GitHubの画面で自動的に表示されます。READMEにはひな形の本文を重複して掲載しません。6章・8章のルールを変えたときは、ひな形も同じPRで直します。
 
 ## 5. 開発の進め方
 
