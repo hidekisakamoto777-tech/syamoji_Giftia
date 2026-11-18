@@ -10,9 +10,12 @@
 -- 【注意】match_text の文言は、2026-11-18時点では「たたき台」（11/16の案B）です。
 --   班で文言が決まったら、このファイルの値を直して、もう一度流してください。
 --
--- 【確認が必要】products.product_id の型・長さ・文字コードは、実DBで確認していません。
---   下の VARCHAR(20) が合っているかを `SHOW CREATE TABLE products;` で確かめてください。
---   商品への外部キーは、型を確認してから、最後のコメントを外して追加します。
+-- 【確認済み（2026-11-18）】班のDBは giftia_t602。products.product_id は
+--   varchar(10)、文字コードは utf8mb4 / utf8mb4_ja_0900_as_cs。下のテーブルも合わせてある。
+--   商品への外部キーは、products.product_id が主キーか索引付きであることを確かめてから、
+--   最後のコメントを外して追加する。
+--
+-- 【流し方】MySQL Workbench で、先に `USE giftia_t602;` を実行してから、このファイルを流す。
 
 CREATE TABLE IF NOT EXISTS tag_id (
   tagid      VARCHAR(10)  NOT NULL COMMENT 'タグのID（T0001〜T0005）',
@@ -20,10 +23,10 @@ CREATE TABLE IF NOT EXISTS tag_id (
   definition TEXT         NOT NULL COMMENT 'タグの意味。画面の表示・チーム内の説明用',
   match_text TEXT         NOT NULL COMMENT '類似度の計算に使う説明文。画面には出さない',
   PRIMARY KEY (tagid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_ja_0900_as_cs;
 
 CREATE TABLE IF NOT EXISTS product_favorite (
-  product_id VARCHAR(20)  NOT NULL COMMENT '商品ID（productsにある商品）',
+  product_id VARCHAR(10)  NOT NULL COMMENT '商品ID（productsにある商品）',
   tag_id     VARCHAR(10)  NOT NULL COMMENT 'タグのID（tag_id.tagid）',
   similarity DECIMAL(5,4) NOT NULL COMMENT '説明文とmatch_textの類似度（0〜1）。並び順に使う',
   writer     VARCHAR(10)  NOT NULL COMMENT 'タグを付けたのが自動処理か人か（自動／人）',
@@ -34,7 +37,7 @@ CREATE TABLE IF NOT EXISTS product_favorite (
   -- 検索は「選んだタグが付いた商品」を探すので、tag_id だけで引ける索引を付ける
   KEY idx_product_favorite_tag_id (tag_id),
   CONSTRAINT fk_product_favorite_tag FOREIGN KEY (tag_id) REFERENCES tag_id (tagid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_ja_0900_as_cs;
 
 -- タグ5件（要件定義書 5.2「タグの一覧」と「計算用の説明文」）
 INSERT INTO tag_id (tagid, tag_name, definition, match_text) VALUES
