@@ -39,13 +39,18 @@ def get_connection():
     )
 
 
-def fetch_all(query: str, params: tuple = ()) -> list[dict]:
+def fetch_all(query: str, params: tuple = (), conn=None) -> list[dict]:
     """SELECT を実行して、行を dict のリストで返す。
-    値は params で渡す（SQL の中の %s に入る）。文字列に直接つなげると、入力次第で DB を壊される。"""
-    conn = get_connection()
+    値は params で渡す（SQL の中の %s に入る）。文字列に直接つなげると、入力次第で DB を壊される。
+    conn（つないである接続）を渡すと、それを使い回す（閉じない。閉じるのは渡した側）。
+    渡さないときは、今までどおり、1回ごとに接続して、終わったら閉じる。"""
+    own = conn is None  # 接続を渡されなかったときだけ、自分で作って、自分で閉じる
+    if own:
+        conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
     finally:
-        conn.close()
+        if own:
+            conn.close()
