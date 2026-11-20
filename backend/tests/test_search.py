@@ -22,31 +22,53 @@ import main  # noqa: E402
 TAGS = [{"tagid": f"T000{i}"} for i in range(1, 6)]
 
 
-def fake_db(calls, rows=None):
-    """fetch_all の代わり。呼ばれた SQL と値を calls に記録し、それらしい結果を返す"""
+class FakeConn:
+    """偽の接続。閉じられたかを覚えておく"""
 
-    def _fetch(query, params=()):
-        calls.append((query, params))
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def fake_db(calls, rows=None, boom=None):
+    """fetch_all の代わり。呼ばれた SQL・値・使った接続を calls に記録し、それらしい結果を返す。
+    boom に例外を入れると、一覧を取る質問のところで、その例外が起きる"""
+
+    def _fetch(query, params=(), conn=None):
+        calls.append((query, params, conn))
         if "FROM tag_id" in query and "JOIN" not in query:
             return TAGS
         if "COUNT(*)" in query:
             return [{"n": len(rows or [])}]
+        if boom:
+            raise boom
         return rows or []
 
     return _fetch
 
 
-def call_search(calls, rows=None, **kw):
-    """search() を、画面から呼ばれたときと同じ形（省略した条件は既定値）で呼ぶ"""
+def call_search(calls, rows=None, conns=None, boom=None, **kw):
+    """search() を、画面から呼ばれたときと同じ形（省略した条件は既定値）で呼ぶ。
+    つないだ接続は、conns（リスト）に記録する"""
     args = dict(q="", category="", indiv_wrap=False, scene="", tag_ids=[], price_min=None, price_max=None, limit=20)
     args.update(kw)
-    with patch.object(main, "fetch_all", fake_db(calls, rows)):
+    made = conns if conns is not None else []
+
+    def _connect():
+        c = FakeConn()
+        made.append(c)
+        return c
+
+    with patch.object(main, "fetch_all", fake_db(calls, rows, boom)), patch.object(main, "get_connection", _connect):
         return main.search(**args)
 
 
 def sql_of(calls, keyword):
     """記録した SQL のうち、keyword を含む最初のもの（SQL, 値）"""
-    return next(c for c in calls if keyword in c[0])
+    sql, params, _ = next(c for c in calls if keyword in c[0])
+    return sql, params
 
 
 ROW = {
@@ -113,7 +135,7 @@ class SearchQueryTest(unittest.TestCase):
         calls = []
         evil = "'; DROP TABLE products; --"
         call_search(calls, q=evil, category=evil, scene=evil)
-        for sql, params in calls:
+        for sql, _params, _conn in calls:
             self.assertNotIn("DROP", sql)
         self.assertIn(evil, sql_of(calls, "LIMIT")[1])
 
@@ -150,6 +172,79 @@ class TagValidationTest(unittest.TestCase):
         call_search([], tag_ids=["T0001", "T0002"])
 
 
+class ConnectionTest(unittest.TestCase):
+    """F-3：検索1回につき、DBへの接続は1回。使い回して、最後に必ず閉じる"""
+
+    def test_タグなしでも接続は1回(self):
+        calls, conns = [], []
+        call_search(calls, conns=conns)
+        self.assertEqual(len(conns), 1)
+        self.assertEqual(len(calls), 2)  # 件数・一覧
+        self.assertTrue(all(c[2] is conns[0] for c in calls))
+        self.assertTrue(conns[0].closed)
+
+    def test_タグありでも接続は1回(self):
+        calls, conns = [], []
+        call_search(calls, conns=conns, tag_ids=["T0001", "T0002"])
+        self.assertEqual(len(conns), 1)
+        self.assertEqual(len(calls), 3)  # タグの検証・件数・一覧
+        self.assertTrue(all(c[2] is conns[0] for c in calls))
+        self.assertTrue(conns[0].closed)
+
+    def test_登録されていないタグで止まっても接続を閉じる(self):
+        calls, conns = [], []
+        with self.assertRaises(HTTPException):
+            call_search(calls, conns=conns, tag_ids=["T9999"])
+        self.assertEqual(len(conns), 1)
+        self.assertTrue(conns[0].closed)
+
+    def test_途中でDBのエラーが起きても接続を閉じる(self):
+        calls, conns = [], []
+        with self.assertRaises(RuntimeError):
+            call_search(calls, conns=conns, boom=RuntimeError("DB error"))
+        self.assertTrue(conns[0].closed)
+
+    def test_入力が不正なときは接続しない(self):
+        conns = []
+        with self.assertRaises(HTTPException):
+            call_search([], conns=conns, tag_ids=["T0001", "T0002", "T0003"])
+        self.assertEqual(conns, [])
+
+    def test_fetch_allは接続を渡さないと自分でつなぎ_閉じる(self):  # 既存の使い方（/api/health）が壊れない
+        import database
+
+        made = []
+
+        class Cur:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def execute(self, q, p=()):
+                pass
+
+            def fetchall(self):
+                return [{"n": 1}]
+
+        class Conn(FakeConn):
+            def cursor(self):
+                return Cur()
+
+        def connect():
+            made.append(Conn())
+            return made[-1]
+
+        with patch.object(database, "get_connection", connect):
+            self.assertEqual(database.fetch_all("SELECT 1"), [{"n": 1}])
+            self.assertTrue(made[0].closed)  # 自分でつないだので、自分で閉じる
+            mine = Conn()
+            database.fetch_all("SELECT 1", conn=mine)
+            self.assertFalse(mine.closed)  # 渡された接続は、閉じない（閉じるのは渡した側）
+            self.assertEqual(len(made), 1)  # 新しくはつながない
+
+
 class ResponseTest(unittest.TestCase):
     def test_結果の形_既存の項目は変えず_説明文とタグ名を足す(self):
         row = dict(ROW, rating=4.5, review_count=12, tag_names="おしゃれな物や部屋づくりにこだわる|ちょっと変わったものが好き")
@@ -168,8 +263,16 @@ class ResponseTest(unittest.TestCase):
         g = call_search([], rows=[ROW])["results"][0]
         self.assertEqual(g["matchedTags"], [])
 
-    def test_レビューなしの評価は今までどおり0(self):
-        self.assertEqual(call_search([], rows=[ROW])["results"][0]["rating"], 0)
+    def test_レビューなしの評価はnull_星0にしない(self):  # F-4（以前は0を返していた。仕様変更：11/19）
+        self.assertIsNone(call_search([], rows=[ROW])["results"][0]["rating"])
+
+    def test_評価はDBの保存値をそのまま返す(self):  # D-1：計算し直さない
+        g = call_search([], rows=[dict(ROW, rating=4.3, review_count=36)])["results"][0]
+        self.assertEqual(g["rating"], 4.3)
+
+    def test_星0と区別できる(self):  # 保存値が0の商品は0のまま。レビューなし（null）とは別
+        g = call_search([], rows=[dict(ROW, rating=0, review_count=1)])["results"][0]
+        self.assertEqual(g["rating"], 0)
 
     def test_類似度と根拠は返さない(self):  # 6.4 No.8
         g = call_search([], rows=[dict(ROW, tag_names="x")], tag_ids=["T0001"])["results"][0]

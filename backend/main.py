@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import fetch_all
+from database import fetch_all, get_connection
 
 load_dotenv()  # .env を読む（DB の接続情報・CORS の許可）
 
@@ -48,29 +48,35 @@ def search(
     """条件に合う商品を、上位 limit 件返す。
     並び順（要件定義書 6.2）：タグを選んだとき＝選んだタグの類似度の合計が高い順。
     同点・タグなしのとき＝評価（rating）の高い順 → レビュー件数の多い順。販売数は使わない"""
-    # ① タグの検証（画面だけに頼らず、サーバーでも確かめる）
-    tag_ids = list(dict.fromkeys(tag_ids))  # 同じタグが2回来ても1個として数える
+    # ① 入力の形を確かめる（DB にはつながない）。同じタグが2回来ても1個として数える
+    tag_ids = list(dict.fromkeys(tag_ids))
     if len(tag_ids) > MAX_TAGS:
         raise HTTPException(status_code=422, detail=f"tag_ids は{MAX_TAGS}個までです")
-    if tag_ids:
-        known = {r["tagid"] for r in fetch_all("SELECT tagid FROM tag_id")}
-        if any(t not in known for t in tag_ids):
-            raise HTTPException(status_code=422, detail="tag_ids に、登録されていないタグがあります")
 
     # ② SQL を組み立てる（値は %s で渡し、SQL の文字列に直接つなげない）
     select_sql, from_sql, from_params, where_sql, where_params, order_sql = build_search_query(
         q, category, indiv_wrap, scene, tag_ids, price_min, price_max
     )
 
-    # ③ 件数と、上位 limit 件を取る
-    total = fetch_all(
-        f"SELECT COUNT(*) AS n FROM {from_sql} WHERE {where_sql}", (*from_params, *where_params)
-    )[0]["n"]
-    rows = fetch_all(
-        f"SELECT {select_sql} FROM {from_sql} WHERE {where_sql} ORDER BY {order_sql} LIMIT %s",
-        (*from_params, *where_params, limit),
-    )
-    # ④ DB の行を、画面の Gift 型（1週目）に詰め替えて返す
+    # ③ DB につなぐのは、検索1回につき1回だけ（F-3）。タグの検証・件数・一覧の3つの質問で、同じ接続を使い回す。
+    #    途中でエラーになっても、finally で必ず閉じる
+    conn = get_connection()
+    try:
+        if tag_ids:  # 登録されているタグか（画面だけに頼らず、サーバーでも確かめる）
+            known = {r["tagid"] for r in fetch_all("SELECT tagid FROM tag_id", conn=conn)}
+            if any(t not in known for t in tag_ids):
+                raise HTTPException(status_code=422, detail="tag_ids に、登録されていないタグがあります")
+        total = fetch_all(
+            f"SELECT COUNT(*) AS n FROM {from_sql} WHERE {where_sql}", (*from_params, *where_params), conn=conn
+        )[0]["n"]
+        rows = fetch_all(
+            f"SELECT {select_sql} FROM {from_sql} WHERE {where_sql} ORDER BY {order_sql} LIMIT %s",
+            (*from_params, *where_params, limit),
+            conn=conn,
+        )
+    finally:
+        conn.close()
+    # ④ DB の行を、画面の Gift 型に詰め替えて返す
     return {"total": total, "results": [to_gift(r) for r in rows]}
 
 
@@ -129,7 +135,9 @@ def to_gift(r: dict) -> dict:
         "brand": r["brand"],
         "name": r["product_name"],
         "price": r["price"],
-        "rating": float(r["rating"]) if r["rating"] is not None else 0,  # レビューなしは 0
+        # レビューなしは null（0 にしない）。「レビューなし」と「星0」を区別するため（F-4）。
+        # 評価は DB の保存値をそのまま返す。バックエンドで平均を計算し直さない（D-1）
+        "rating": float(r["rating"]) if r["rating"] is not None else None,
         "reviewCount": r["review_count"],
         "description": r["description"],
         "matchedTags": tag_names.split("|") if tag_names else [],  # 選んだタグのうち、この商品に付いているもの
