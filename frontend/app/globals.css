@@ -13,6 +13,28 @@ body { margin:0; font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; co
 .form input, .form select, .form button { font-size:15px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; }
 .form .chk { display:flex; align-items:center; gap:4px; font-size:14px; }
 .form button[type="submit"] { background:var(--accent); color:#fff; border:none; min-width:88px; cursor:pointer; }
+/* 予算スライダー（Issue #16）：1本のバーに2つのつまみを重ねる */
+/* いまの検索タブ：キーワード欄と予算の行を縦に重ねた列。カテゴリー・検索ボタンは1行目の高さにそろえる */
+.form.form-std { align-items:flex-start; }
+.form .form-main { flex:1 1 240px; display:flex; flex-direction:column; gap:8px; }
+.form .form-main .q { flex:none; width:100%; }
+/* 予算の行：1行目＝予算・金額の枠・スライダー、2行目＝枠の真下にチェックボックス */
+.budget { display:grid; grid-template-columns:auto auto auto auto 1fr; align-items:center; column-gap:8px; row-gap:4px; }
+.budget-label { font-size:14px; }
+/* 金額の枠：キーワード欄と同じ input の見た目（.form input）を使い、幅と文字の位置だけ決める */
+.form .budget-box { width:130px; text-align:center; color:var(--ink); }
+.budget-range { position:relative; height:28px; min-width:120px; margin:0 9px 0 17px; }
+.budget-track, .budget-fill { position:absolute; top:12px; height:4px; border-radius:2px; }
+.budget-track { left:0; right:0; background:var(--line); }
+.budget-fill { background:var(--accent); }
+/* 2本の range を同じ場所に重ね、バー自体はクリックを通し、つまみだけ操作できるようにする */
+.budget-range input[type="range"] { position:absolute; left:-9px; width:calc(100% + 18px); top:0; height:28px; margin:0; padding:0; border:none; background:transparent; pointer-events:none; -webkit-appearance:none; appearance:none; }
+.budget-range input[type="range"]::-webkit-slider-runnable-track { background:transparent; }
+.budget-range input[type="range"]::-moz-range-track { background:transparent; }
+.budget-range input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; pointer-events:auto; width:18px; height:18px; border-radius:50%; background:#fff; border:2px solid var(--accent); cursor:pointer; }
+.budget-range input[type="range"]::-moz-range-thumb { pointer-events:auto; width:18px; height:18px; border-radius:50%; background:#fff; border:2px solid var(--accent); cursor:pointer; box-sizing:border-box; }
+.budget-range input[type="range"]:disabled::-webkit-slider-thumb { border-color:#b0b7bf; background:#e4e7eb; cursor:not-allowed; }
+.budget-range input[type="range"]:disabled::-moz-range-thumb { border-color:#b0b7bf; background:#e4e7eb; cursor:not-allowed; }
 .grid { display:grid; gap:12px; }
 .card { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fff; }
 .card .name { font-size:16px; margin:4px 0; }
