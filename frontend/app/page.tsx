@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import ResultCard from "./ResultCard";
+import BudgetSlider, { INITIAL_BUDGET, budgetToPrices, type Budget } from "./BudgetSlider";
 import { searchGifts, type Gift } from "@/lib/api";
 
 export default function Home() {
@@ -13,6 +14,7 @@ export default function Home() {
   const [category, setCategory] = useState("");                           // 選んだカテゴリー
   const [indivWrap, setIndivWrap] = useState(false);                      // 個包装だけ（取引先へのお礼）
   const [priceBand, setPriceBand] = useState("");                         // 価格帯（取引先へのお礼）
+  const [budget, setBudget] = useState<Budget>(INITIAL_BUDGET);           // 予算の下限・上限（いまの検索）
   const [results, setResults] = useState<Gift[] | null>(null);            // 検索結果
   const [error, setError] = useState("");                                 // つながらないときの文言
 
@@ -22,8 +24,8 @@ export default function Home() {
     setError("");
     // いま開いているタブの条件だけを送る（もう一方のタブの入力は送らない）
     const condition = mode === "standard"
-      ? { keyword, category, indivWrap: false, priceBand: "" }
-      : { keyword: "", category: "", indivWrap, priceBand };
+      ? { keyword, category, indivWrap: false, priceBand: "", ...budgetToPrices(budget) }
+      : { keyword: "", category: "", indivWrap, priceBand, priceMin: null, priceMax: null }; // お礼タブは今までどおり
     try {
       setResults(await searchGifts(condition));
     } catch (err) {
@@ -43,10 +45,15 @@ export default function Home() {
         <button className={mode === "business" ? "on" : ""} onClick={() => { setMode("business"); setResults(null); }}>取引先へのお礼</button>
       </nav>
 
-      <form className="form" onSubmit={onSearch}>
+      <form className={mode === "standard" ? "form form-std" : "form"} onSubmit={onSearch}>
         {mode === "standard" ? (
           <>
-            <input className="q" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="キーワード（例：送別 お菓子）" />
+            {/* キーワード欄の下に予算の行を置き、スライダーの右端をキーワード欄の右端にそろえる */}
+            <div className="form-main">
+              <input className="q" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="キーワード（例：送別 お菓子）" />
+              {/* 予算の下限・上限（いまの検索だけ） */}
+              <BudgetSlider value={budget} onChange={setBudget} />
+            </div>
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">すべてのカテゴリー</option>
               <option value="コスメ">コスメ</option>
