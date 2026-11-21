@@ -23,7 +23,7 @@
 #     境目と同じ点数の商品は全部選ぶので、上位◯%より少し多くなることがある
 #     （同じ文の商品は同じ点数になる。例：「定番の贈りものです。」は654件が同じ点数。一部だけ選ぶと、商品IDの順で決まってしまう）
 #   ・境目の商品を何件ずつ人が見るか → 今は仮に BORDER 件ずつ
-#   ・言い回しでの分類を組み合わせるか
+#   ・言い回しでの分類を組み合わせるか → 2026-11-21 に、行わないと決定（要件定義書 4.1・5.5）
 #
 # 使い方（backend/ で実行する）
 #   python scripts/tag_products.py --products ../experiments/giftia_tag_trial/data/products_all.json --out scores.csv
