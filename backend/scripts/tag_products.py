@@ -6,18 +6,20 @@
 #   3. タグの計算用の説明文（match_text）との類似度を文ごとに出し、いちばん高い文の点数をその商品の点数にする
 #      その文を「根拠の一文（reason）」として残す
 #   4. 全商品×5タグの点数を CSV に出す。--top-percent を付けると、タグごとに上位◯%を選んだ CSV も出す
-#   5. 選ぶときは、班で決めた2つのルールを当てはめる（Slack で4人が了承。要件定義書への反映はこれから）
+#   5. 選ぶときは、班で決めた2つのルールを当てはめる（要件定義書 5.5 の注記）
 #      ・カタログギフトは e5 で選ぶ対象から外し、「定番で安心なものがいい」だけを付ける
 #      ・逆の意味のタグ（ちょっと変わったもの×定番で安心）が両方付いたら、ならした点数（z）の高い方を残す
 #   6. --out-review を付けると、人が確かめる一覧を出す（両方付いて外したもの・選ぶかどうかの境目の商品）
 #   7. --save-db を付けると、選んだ結果を product_favorite に入れる準備をする（入れる件数を表示するだけ）
 #      --write も付けたときだけ、本当に書き込む。書き込み方：
-#      ・前回「自動」で入れた行を消してから、今回の結果を入れる（何度流しても、同じ行が重ならない）
-#      ・人が確かめて入れた行（writer＝人）は消さない。同じ商品×タグがあれば、人の行を残す
+#      ・前回「自動」で入れた行のうち、まだ誰も確認していない行（checked_by が空）を消してから、今回の結果を入れる
+#        （何度流しても、同じ行が重ならない）
+#      ・人が入れた行（writer＝人）と、人が確認した行（checked_by が入っている）は消さない
+#        同じ商品×タグがあれば、その行を残す（5.5 ④でやり直しても、確認の記録が消えないようにするため）
 #      ・途中でエラーになったら、全部取り消す（半分だけ書き込まれた状態にならない）
 #
 # まだ決まっていないこと（決まったら、ここに足す）
-#   ・上位何%で付けるか（#12 の正解データで決める）→ 今は --top-percent で毎回指定する（まずは10%で試す）
+#   ・上位何%で付けるか → 2026-11-21 の打ち合わせで 5% に決定（チームでの評価で見直す）。--top-percent で毎回指定する
 #     境目と同じ点数の商品は全部選ぶので、上位◯%より少し多くなることがある
 #     （同じ文の商品は同じ点数になる。例：「定番の贈りものです。」は654件が同じ点数。一部だけ選ぶと、商品IDの順で決まってしまう）
 #   ・境目の商品を何件ずつ人が見るか → 今は仮に BORDER 件ずつ
@@ -25,9 +27,9 @@
 #
 # 使い方（backend/ で実行する）
 #   python scripts/tag_products.py --products ../experiments/giftia_tag_trial/data/products_all.json --out scores.csv
-#   python scripts/tag_products.py --from-db --out scores.csv --top-percent 10 --out-selected selected.csv --out-review review.csv
+#   python scripts/tag_products.py --from-db --out scores.csv --top-percent 5 --out-selected selected.csv --out-review review.csv
 #   --from-db は、.env の接続情報で班の DB の products と tag_id を読む（読むだけ。書き込まない）
-#   python scripts/tag_products.py --from-db --out scores.csv --top-percent 10 --out-selected selected.csv --save-db
+#   python scripts/tag_products.py --from-db --out scores.csv --top-percent 5 --out-selected selected.csv --save-db
 #   → 入れる件数を確かめる。よければ、最後に --write を足して、もう一度流す（班の DB に書き込む）
 #
 # 必要な部品：sentence-transformers（e5 を動かす）。requirements.txt に足すのは班の合意のあと。
@@ -220,7 +222,8 @@ def write_selected(path, rows):
 
 # ---- 7. product_favorite に入れる ----
 def save_db(rows, write: bool):
-    """前回の「自動」の行を消して、今回の行を入れる。人の行（writer＝人）は残す。
+    """前回の「自動」で、まだ確認していない行を消して、今回の行を入れる。
+    人の行（writer＝人）と、確認済みの行（checked_by が入っている）は残す。
     write が False のときは、件数を数えて表示するだけ（DB は変えない）"""
     use_backend()
     from database import get_connection
@@ -228,22 +231,26 @@ def save_db(rows, write: bool):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT product_id, tag_id, writer FROM product_favorite")
+            cur.execute("SELECT product_id, tag_id, writer, checked_by FROM product_favorite")
             existing = cur.fetchall()
-            human = {(r["product_id"], r["tag_id"]) for r in existing if r["writer"] == "人"}
-            old_auto = sum(1 for r in existing if r["writer"] == "自動")
-            new = [r for r in rows if (r[0], r[1]) not in human]  # 人が入れた商品×タグは、人の行を残す
+            # 消す行：自動で入れて、まだ誰も確認していない行。それ以外（人の行・確認済みの行）は全部残す
+            old_auto = [r for r in existing if r["writer"] == "自動" and r["checked_by"] is None]
+            checked = [r for r in existing if r["writer"] == "自動" and r["checked_by"] is not None]
+            human = [r for r in existing if r["writer"] == "人"]
+            keep = {(r["product_id"], r["tag_id"]) for r in existing} - {(r["product_id"], r["tag_id"]) for r in old_auto}
+            new = [r for r in rows if (r[0], r[1]) not in keep]  # 残す行と同じ商品×タグは、残す行の方を使う
 
             print("product_favorite への書き込み" + ("" if write else "（確認だけ。まだ書き込まない）"))
-            print(f"  今ある行：{len(existing)}行（自動 {old_auto}・人 {len(human)}・その他 {len(existing) - old_auto - len(human)}）")
-            print(f"  消す行（前回の自動）：{old_auto}行")
-            print(f"  入れる行（今回の自動）：{len(new)}行（人の行と重なるので入れない：{len(rows) - len(new)}行）")
-            print(f"  書き込んだあとの行：{len(existing) - old_auto + len(new)}行")
+            print(f"  今ある行：{len(existing)}行（自動・未確認 {len(old_auto)}・自動・確認済み {len(checked)}・人 {len(human)}"
+                  f"・その他 {len(existing) - len(old_auto) - len(checked) - len(human)}）")
+            print(f"  消す行（前回の自動・未確認）：{len(old_auto)}行")
+            print(f"  入れる行（今回の自動）：{len(new)}行（残す行と重なるので入れない：{len(rows) - len(new)}行）")
+            print(f"  書き込んだあとの行：{len(existing) - len(old_auto) + len(new)}行")
             if not write:
                 print("  よければ、同じ指定に --write を足して、もう一度流してください")
                 return
 
-            cur.execute("DELETE FROM product_favorite WHERE writer = %s", ("自動",))
+            cur.execute("DELETE FROM product_favorite WHERE writer = %s AND checked_by IS NULL", ("自動",))
             cur.executemany(
                 "INSERT INTO product_favorite (product_id, tag_id, similarity, writer, reason, checked_by, tagged_at)"
                 " VALUES (%s, %s, %s, %s, %s, %s, %s)",  # 値は %s で渡す（文字列を SQL に直接つなげない）
