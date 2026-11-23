@@ -14,10 +14,11 @@ body { margin:0; font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; co
 .form .chk { display:flex; align-items:center; gap:4px; font-size:14px; }
 .form button[type="submit"] { background:var(--accent); color:#fff; border:none; min-width:88px; cursor:pointer; }
 /* 予算スライダー（Issue #16）：1本のバーに2つのつまみを重ねる */
-/* いまの検索タブ：キーワード欄と予算の行を縦に重ねた列。カテゴリー・検索ボタンは1行目の高さにそろえる */
-.form.form-std { align-items:flex-start; }
-.form .form-main { flex:1 1 240px; display:flex; flex-direction:column; gap:8px; }
-.form .form-main .q { flex:none; width:100%; }
+/* いまの検索タブ（案B・Issue #14）：上の1つの枠に、3行を縦に重ねる */
+/* 1行目＝キーワード・シーン・カテゴリー・検索／2行目＝予算／3行目＝タグ（誕生日のときだけ） */
+/* flex-wrap:nowrap：縦並びで折り返しを有効にすると、1行目の高さが2段分で計算され、上下に余計な空きが出るため止める */
+.form.form-std { flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:12px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+.form .form-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 /* 予算の行：1行目＝予算・金額の枠・スライダー、2行目＝枠の真下にチェックボックス */
 .budget { display:grid; grid-template-columns:auto auto auto auto 1fr; align-items:center; column-gap:8px; row-gap:4px; }
 .budget-label { font-size:14px; }
@@ -35,6 +36,14 @@ body { margin:0; font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; co
 .budget-range input[type="range"]::-moz-range-thumb { pointer-events:auto; width:18px; height:18px; border-radius:50%; background:#fff; border:2px solid var(--accent); cursor:pointer; box-sizing:border-box; }
 .budget-range input[type="range"]:disabled::-webkit-slider-thumb { border-color:#b0b7bf; background:#e4e7eb; cursor:not-allowed; }
 .budget-range input[type="range"]:disabled::-moz-range-thumb { border-color:#b0b7bf; background:#e4e7eb; cursor:not-allowed; }
+/* タグ欄（Issue #14）：丸いボタンを並べ、選んだものは濃い色にする */
+.tag-picker { display:flex; flex-direction:column; gap:6px; }
+.tag-label { font-size:14px; }
+.tag-list { display:flex; flex-wrap:wrap; gap:6px; }
+.form .tag-btn { font-size:13px; padding:4px 12px; border-radius:999px; cursor:pointer; }
+.form .tag-btn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.form .tag-btn:disabled { color:#b0b7bf; cursor:not-allowed; }
+.tag-hint { font-size:12px; color:var(--sub); }
 .grid { display:grid; gap:12px; }
 .card { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fff; }
 .card .name { font-size:16px; margin:4px 0; }

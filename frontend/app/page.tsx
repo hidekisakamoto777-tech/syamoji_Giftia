@@ -5,7 +5,12 @@
 import { useState } from "react";
 import ResultCard from "./ResultCard";
 import BudgetSlider, { INITIAL_BUDGET, budgetToPrices, type Budget } from "./BudgetSlider";
+import TagPicker from "./TagPicker";
 import { searchGifts, type Gift } from "@/lib/api";
+
+// シーンの選択肢（Issue #14）。「誕生日」のときだけタグ欄を出す。
+// 「すべてのシーン」はシーンで絞らない（API に scene を送らない）＝これまでどおりの検索
+const BIRTHDAY = "誕生日";
 
 export default function Home() {
   // ① 状態（変化するデータ）を覚える箱
@@ -15,17 +20,26 @@ export default function Home() {
   const [indivWrap, setIndivWrap] = useState(false);                      // 個包装だけ（取引先へのお礼）
   const [priceBand, setPriceBand] = useState("");                         // 価格帯（取引先へのお礼）
   const [budget, setBudget] = useState<Budget>(INITIAL_BUDGET);           // 予算の下限・上限（いまの検索）
+  const [scene, setScene] = useState("");                                 // シーン（"誕生日" か ""＝すべてのシーン）
+  const [tagIds, setTagIds] = useState<string[]>([]);                     // 選んだタグ（誕生日のときだけ）
   const [results, setResults] = useState<Gift[] | null>(null);            // 検索結果
   const [error, setError] = useState("");                                 // つながらないときの文言
+
+  // シーンを変えたとき：誕生日から「すべてのシーン」にしたら、選んでいたタグを外す（見えないタグが検索条件に残らないように）
+  function onSceneChange(next: string) {
+    setScene(next);
+    if (next !== BIRTHDAY) setTagIds([]);
+  }
 
   // ② 検索ボタンの処理（API に聞くので、結果が返るまで待つ＝async/await）
   async function onSearch(e: React.FormEvent) {
     e.preventDefault(); // ページの再読み込みを止める
     setError("");
     // いま開いているタブの条件だけを送る（もう一方のタブの入力は送らない）
+    // タグは、シーンが誕生日のときだけ送る（念のため、ここでも確かめる）
     const condition = mode === "standard"
-      ? { keyword, category, indivWrap: false, priceBand: "", ...budgetToPrices(budget) }
-      : { keyword: "", category: "", indivWrap, priceBand, priceMin: null, priceMax: null }; // お礼タブは今までどおり
+      ? { keyword, category, indivWrap: false, priceBand: "", ...budgetToPrices(budget), scene, tagIds: scene === BIRTHDAY ? tagIds : [] }
+      : { keyword: "", category: "", indivWrap, priceBand, priceMin: null, priceMax: null, scene: "", tagIds: [] }; // お礼タブは今までどおり
     try {
       setResults(await searchGifts(condition));
     } catch (err) {
@@ -48,18 +62,25 @@ export default function Home() {
       <form className={mode === "standard" ? "form form-std" : "form"} onSubmit={onSearch}>
         {mode === "standard" ? (
           <>
-            {/* キーワード欄の下に予算の行を置き、スライダーの右端をキーワード欄の右端にそろえる */}
-            <div className="form-main">
+            {/* 案B：条件を上の1つの枠に3行でまとめる。1行目＝キーワード・シーン・カテゴリー・検索 */}
+            <div className="form-row">
               <input className="q" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="キーワード（例：送別 お菓子）" />
-              {/* 予算の下限・上限（いまの検索だけ） */}
-              <BudgetSlider value={budget} onChange={setBudget} />
+              <select aria-label="シーン" value={scene} onChange={(e) => onSceneChange(e.target.value)}>
+                <option value="">すべてのシーン</option>
+                <option value={BIRTHDAY}>誕生日</option>
+              </select>
+              <select aria-label="カテゴリー" value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">すべてのカテゴリー</option>
+                <option value="コスメ">コスメ</option>
+                <option value="食品">食品</option>
+                <option value="生活雑貨">生活雑貨</option>
+              </select>
+              <button type="submit">検索</button>
             </div>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">すべてのカテゴリー</option>
-              <option value="コスメ">コスメ</option>
-              <option value="食品">食品</option>
-              <option value="生活雑貨">生活雑貨</option>
-            </select>
+            {/* 2行目：予算の下限・上限（いまの検索だけ） */}
+            <BudgetSlider value={budget} onChange={setBudget} />
+            {/* 3行目：贈る相手のタイプ（タグ）。シーンが誕生日のときだけ出す（FR-04-02） */}
+            {scene === BIRTHDAY && <TagPicker value={tagIds} onChange={setTagIds} />}
           </>
         ) : (
           <>
@@ -69,9 +90,9 @@ export default function Home() {
               <option value="3000">3,000〜5,000円</option>
               <option value="5000">5,000〜10,000円</option>
             </select>
+            <button type="submit">検索</button>
           </>
         )}
-        <button type="submit">検索</button>
       </form>
 
       {error && <p className="summary">{error}</p>}

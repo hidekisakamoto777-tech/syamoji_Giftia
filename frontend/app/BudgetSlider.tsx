@@ -59,10 +59,11 @@ export default function BudgetSlider({ value, onChange }: Props) {
     // 2行目：（空き）｜下限なし｜（空き）｜上限なし｜（空き）
     <div className="budget">
       <span className="budget-label">予算</span>
-      {/* 選んだ金額を見せる枠。キーワード欄と同じ高さにするため input を使う（読み取り専用。金額はスライダーで選ぶ） */}
-      <input className="budget-box" readOnly tabIndex={-1} aria-label="選んだ予算の下限" value={noMin ? "下限なし" : `下限 ${yen(min)}`} />
+      {/* 選んだ金額を見せる枠。キーワード欄と同じ高さにするため input を使う（読み取り専用。金額はスライダーで選ぶ）
+          枠には金額だけを出す（「下限」「上限」の文字は付けない。全体ミーティングで合意）。「なし」のときだけ「下限なし」「上限なし」と出す */}
+      <input className="budget-box" readOnly tabIndex={-1} aria-label="選んだ予算の下限" value={noMin ? "下限なし" : yen(min)} />
       <span>〜</span>
-      <input className="budget-box" readOnly tabIndex={-1} aria-label="選んだ予算の上限" value={noMax ? "上限なし" : `上限 ${yen(max)}`} />
+      <input className="budget-box" readOnly tabIndex={-1} aria-label="選んだ予算の上限" value={noMax ? "上限なし" : yen(max)} />
 
       <div className="budget-range">
         <div className="budget-track" />
