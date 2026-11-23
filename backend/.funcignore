@@ -1,0 +1,12 @@
+# Azure に送らないもの（.gitignore と同じ書き方）
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.env
+.env.example
+*.db
+tests/
+# 次の2つは、本番の API では使わない（タグ付けの作業用・DBの変更を記録した SQL）
+scripts/
+sql/
