@@ -22,6 +22,8 @@ export type SearchCondition = {
   priceBand: string;  // 取引先へのお礼："" | "3000" | "5000"
   priceMin: number | null; // いまの検索：予算の下限（円）。null なら下限なし（送らない）
   priceMax: number | null; // いまの検索：予算の上限（円）。null なら上限なし（送らない）
+  scene: string;      // いまの検索：シーン（"誕生日" か ""）。"" ならシーンで絞らない（送らない）
+  tagIds: string[];   // いまの検索：選んだタグの id（0〜2個。誕生日のときだけ）
 };
 
 // API の場所。NEXT_PUBLIC_ の値はブラウザに配られる＝秘密は置かない（.env.local に書く）
@@ -39,6 +41,9 @@ export async function searchGifts(c: SearchCondition): Promise<Gift[]> {
   // いまの検索の予算スライダー（FR-08-01）。API は「下限以上・上限以下」で絞る（ちょうどの金額も含む）
   if (c.priceMin !== null) params.set("price_min", String(c.priceMin));
   if (c.priceMax !== null) params.set("price_max", String(c.priceMax));
+  // シーンとタグ（FR-04-02）。タグは複数あるので、同じ名前で並べる（?tag_ids=T0001&tag_ids=T0003）
+  if (c.scene) params.set("scene", c.scene);
+  for (const id of c.tagIds) params.append("tag_ids", id);
 
   // ② fetch で API を呼ぶ（通信が終わるまで待つ＝await）
   const res = await fetch(`${API}/api/search?${params.toString()}`);
